@@ -1,81 +1,101 @@
 """Сервер Telegram бота, запускаемый непосредственно"""
 import logging
-import os
 
-import aiohttp
+#import aiohttp
 from aiogram import Bot, Dispatcher, executor, types
 
 import exceptions
 import expenses
+import general
 import incomes
 from categories import Categories
-from middlewares import AccessMiddleware
+
 
 
 logging.basicConfig(level=logging.INFO)
 
 API_TOKEN = '1798389140:AAFAIr3PJv4sTLrkFGgjEs9h06yNnquZD_s'#os.getenv("TELEGRAM_API_TOKEN")
+
+#Подключение к прокси серверу
 #PROXY_URL = os.getenv("TELEGRAM_PROXY_URL")
 #PROXY_AUTH = aiohttp.BasicAuth(
 #    login=os.getenv("TELEGRAM_PROXY_LOGIN"),
-#    password=os.getenv("TELEGRAM_PROXY_PASSWORD")
-#)
+#    password=os.getenv("TELEGRAM_PROXY_PASSWORD"))
+#Для восможности пользования лишь одним юзером
 #ACCESS_ID = os.getenv("TELEGRAM_ACCESS_ID")
 
 bot = Bot(token=API_TOKEN)#, proxy=PROXY_URL, proxy_auth=PROXY_AUTH)
 dp = Dispatcher(bot)
-#dp.middleware.setup(AccessMiddleware(ACCESS_ID))
-
+#глобальная переменная для определения текущего состояния(Доход/Расход)
+value = 0
 
 @dp.message_handler(commands=['start', 'help', 'back'])
 async def send_welcome(message: types.Message):
     """Отправляет приветственное сообщение и помощь по боту"""
     await message.answer(
         "Бот для учёта финансов\n\n"
-        "Добавить расход: /expense\n"
-        
+        "Добавить расход: /consumption\n"
+        "Добавить доход: /gain\n"
         "Сегодняшняя статистика: /today\n"
         "За текущий месяц: /month\n"
         "Последние внесённые расходы: /expenses\n"
-        "Категории трат: /categories")
+        "Последние внесённые доходы: /incomes\n"
+        )
 
 
 @dp.message_handler(lambda message: message.text.startswith('/del'))
 async def del_expense(message: types.Message):
-    """Удаляет одну запись о расходе по её идентификатору"""
-    row_id = int(message.text[4:])
-    expenses.delete_expense(row_id)
-    answer_message = ("Позиция удалена\n\n"
-                      "Добавить расход: 250 такси\n"
-                      "Сегодняшняя статистика: /today\n"
-                      "За текущий месяц: /month\n"
-                      "Последние внесённые расходы: /expenses\n"
-                      "Категории трат: /categories"
-                      )
-    await message.answer(answer_message)
+    """Удаляет одну запись о расходе или доходе по их идентификатору"""
+    if value == 1:
+        row_id = int(message.text[4:])
+        incomes.delete_income(row_id)
+        answer_message = ("Позиция удалена\n\n"
+                          "Просмотр последних доходов: /incomes\n"
+                          "Главное меню: /back"
+                          )
+        await message.answer(answer_message)
+    elif value == 2:
+        row_id = int(message.text[4:])
+        expenses.delete_expense(row_id)
+        answer_message = ("Позиция удалена\n\n"
+                          "Просмотр последних расходов: /expenses\n"
+                          "Главное меню: /back"
+                          )
+        await message.answer(answer_message)
+    else:
+        answer_message = ("Я не понимаю удалять доход или расход :c\n\n"
+                          "Просмотр последних доходов: /expenses\n"
+                          "Просмотр последних расходов: /expenses\n"
+                          "Главное меню: /back"
+                          )
+        await message.answer(answer_message)
+
 
 
 @dp.message_handler(commands=['categories'])
 async def categories_list(message: types.Message):
-    """Отправляет список категорий расходов"""
-    categories = Categories().get_all_categories()
-    answer_message = ("Категории трат:\n\n* " +\
-            ("\n* ".join([(c.name).encode('cp1251').decode('utf-8')+' ('+", ".join(c.aliases).encode('cp1251').decode('utf-8')+')' for c in categories])))
-    print(answer_message)
+    """Отправляет список категорий расходов или доходов"""
+    if not value == 0:
+        categories = Categories().get_all_categories(value)
+        answer_message = ("Категории:\n\n* " +\
+                ("\n* ".join([(c.name).encode('cp1251').decode('utf-8')+' ('+", ".join(c.aliases).encode('cp1251').decode('utf-8')+')' for c in categories]))+"\n\nГлавное меню: /back")
+    else:
+        answer_message = ("Я не понимаю, какие категории вы хотите увидеть\n\n"
+                          "Главное меню: /back")
     await message.answer(answer_message)
 
 
 @dp.message_handler(commands=['today'])
 async def today_statistics(message: types.Message):
-    """Отправляет сегодняшнюю статистику трат"""
-    answer_message = expenses.get_today_statistics()
+    """Отправляет сегодняшнюю статистику"""
+    answer_message = general.get_today_statistics()
     await message.answer(answer_message)
 
 
 @dp.message_handler(commands=['month'])
 async def month_statistics(message: types.Message):
-    """Отправляет статистику трат текущего месяца"""
-    answer_message = expenses.get_month_statistics()
+    """Отправляет статистику текущего месяца"""
+    answer_message = general.get_month_statistics()
     await message.answer(answer_message)
 
 
@@ -83,30 +103,87 @@ async def month_statistics(message: types.Message):
 async def list_expenses(message: types.Message):
     """Отправляет последние несколько записей о расходах"""
     last_expenses = expenses.last()
+    global value
+    value = 2
     if not last_expenses:
-        await message.answer("Расходы ещё не заведены")
+        await message.answer("Расходы ещё не заведены\n\n"+"Добавить расход: /consumption\n"+"Категории трат: /categories\n"+"Главное меню: /back")
         return
-
     last_expenses_rows = [
-        f"{expense.amount} руб. на {expense.category_name.encode('cp1251').decode('utf-8')} — нажми "
+        f"{expense.amount} руб. на {expense.category_exp_name.encode('cp1251').decode('utf-8')} — нажми "
         f"/del{expense.id} для удаления"
         for expense in last_expenses]
     answer_message = "Последние сохранённые траты:\n\n* " + "\n\n* "\
-            .join(last_expenses_rows)
+            .join(last_expenses_rows)+"\n\nДобавить расход: /consumption\n"+"Категории трат: /categories\n"+"Главное меню: /back"
     await message.answer(answer_message)
 
 
+@dp.message_handler(commands=['incomes'])
+async def list_incomes(message: types.Message):
+    """Отправляет последние несколько записей о доходах"""
+    last_incomes = incomes.last()
+    print(last_incomes)
+    global value
+    value = 1
+    if not last_incomes:
+        await message.answer("Доходы ещё не заведены\n\n"+"Добавить доход: /gain\n"+"Категории трат: /categories\n"+"Главное меню: /back")
+        return
+    last_incomes_rows = [
+        f"{income.amount} руб. на {income.category_inc_name.encode('cp1251').decode('utf-8')} — нажми "
+        f"/del{income.id} для удаления"
+        for income in last_incomes]
+    answer_message = "Последние сохранённые доходы:\n\n* " + "\n\n* "\
+            .join(last_incomes_rows)+"\n\nДобавить доход: /gain\n"+"Категории трат: /categories\n"+"Главное меню: /back"
+    await message.answer(answer_message)
+
+
+@dp.message_handler(commands=['gain'])
+async def month_statistics(message: types.Message):
+    """Добавляет новый доход"""
+    global value
+    value = 1
+    answer_message = ("Введите доход. Например, '15000 зарплата' или '300 перевод'\n\n"
+                      "Категории доходов: /categories\n"
+                      "Главное меню: /back")
+    await message.answer(answer_message)
+
+@dp.message_handler(commands=['consumption'])
+async def month_statistics(message: types.Message):
+    """Добавляет новый расход"""
+    global value
+    value = 2
+    answer_message = ("Введите расход. Например, '250 такси' или '100 перевод'\n\n"
+                      "Категории расходов: /categories\n"
+                      "Главное меню: /back")
+    await message.answer(answer_message)
+
 @dp.message_handler()
 async def add_expense(message: types.Message):
-    """Добавляет новый расход"""
-    try:
-        expense = expenses.add_expense(message.text)
-    except exceptions.NotCorrectMessage as e:
-        await message.answer(str(e))
-        return
-    answer_message = (
-        f"Добавлены траты {expense.amount} руб на {expense.category_name.encode('cp1251').decode('utf-8')}.\n\n"
-        f"{expenses.get_today_statistics()}")
+    """Добавляет новый расход или доход в зависимости от значения value"""
+    if value == 1:
+        try:
+            income = incomes.add_income(message.text)
+            print(income)
+        except exceptions.NotCorrectMessage as e:
+            await message.answer(str(e))
+            return
+        answer_message = (
+            f"Добавлены доходы {income.amount} руб на {income.category_inc_name.encode('cp1251').decode('utf-8')}.\n\n"
+            f"{general.get_today_statistics()}")
+    elif value == 2:
+        try:
+            expense = expenses.add_expense(message.text)
+        except exceptions.NotCorrectMessage as e:
+            await message.answer(str(e))
+            return
+        answer_message = (
+            f"Добавлены траты {expense.amount} руб на {expense.category_exp_name.encode('cp1251').decode('utf-8')}.\n\n"
+            f"{general.get_today_statistics()}")
+    else:
+        answer_message = ("Я не понимаю доход это или расход :c\n\n"
+                          "Добавить расход: /consumption\n"
+                          "Добавить доход: /gain\n"
+                          "Главное меню: /back"
+                          )
     await message.answer(answer_message)
 
 
