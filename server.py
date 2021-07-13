@@ -32,6 +32,8 @@ value = 0
 @dp.message_handler(commands=['start', 'help', 'back'])
 async def send_welcome(message: types.Message):
     """Отправляет приветственное сообщение и помощь по боту"""
+    global value
+    value = 0
     await message.answer(
         "Бот для учёта финансов\n\n"
         "Добавить расход: /consumption\n"
@@ -64,7 +66,7 @@ async def del_expense(message: types.Message):
         await message.answer(answer_message)
     else:
         answer_message = ("Я не понимаю удалять доход или расход :c\n\n"
-                          "Просмотр последних доходов: /expenses\n"
+                          "Просмотр последних доходов: /incomes\n"
                           "Просмотр последних расходов: /expenses\n"
                           "Главное меню: /back"
                           )
@@ -121,7 +123,6 @@ async def list_expenses(message: types.Message):
 async def list_incomes(message: types.Message):
     """Отправляет последние несколько записей о доходах"""
     last_incomes = incomes.last()
-    print(last_incomes)
     global value
     value = 1
     if not last_incomes:
@@ -162,7 +163,6 @@ async def add_expense(message: types.Message):
     if value == 1:
         try:
             income = incomes.add_income(message.text)
-            print(income)
         except exceptions.NotCorrectMessage as e:
             await message.answer(str(e))
             return

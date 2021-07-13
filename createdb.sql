@@ -57,4 +57,4 @@ values
     ("trasfer", "перевод", true, "сбер, альфа, тинькофф, банк, сбербанк"),
     ("other", "прочее", true, "");
 
-insert into budget(codename, daily_limit) values ('base', 500);
+insert into budget(codename, daily_limit) values ('base', 750);

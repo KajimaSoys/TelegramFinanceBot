@@ -71,6 +71,7 @@ def get_month_statistics() -> str:
     result = cursor.fetchone()
     if not result[0]:
         expence_return = "В этом месяце ещё нет расходов\n\n"
+        exp = 0
     else:
         all_today_expenses = result[0]
         cursor.execute(f"select sum(amount) "
@@ -83,6 +84,7 @@ def get_month_statistics() -> str:
                 f"всего — {all_today_expenses} руб.\n"
                 f"базовые — {base_today_expenses} руб. из "
                 f"{now.day * _get_budget_limit()} руб.\n\n")
+        exp = int(all_today_expenses)
     # достаем доходы за месяц
     cursor = db.get_cursor()
     cursor.execute(f"select sum(amount) "
@@ -90,11 +92,15 @@ def get_month_statistics() -> str:
     result = cursor.fetchone()
     if not result[0]:
         income_return = "В этом месяце ещё нет доходов\n\n"
+        inc = 0
     else:
         all_today_incomes = result[0]
         income_return = (f"Доходы в текущем месяце:\n"
                           f"всего — {all_today_incomes} руб.\n\n")
+        inc = int(all_today_incomes)
+    diff = inc - exp
     return (expence_return + income_return +
+            f"Общая прибыль за месяц: {diff} руб.\n\n" 
             "Статистика за день: /today\n"
             "Главное меню: /back\n")
 
