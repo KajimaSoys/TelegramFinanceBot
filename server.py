@@ -66,14 +66,11 @@ async def convert(message: types.Message):
         'RUB_USD': 0.016,
         'RUB_KZT': 7.65,
         'GEL_USD': 0.37,
-        # 'GEL_RUB': 22.31,
         'GEL_KZT': 170.63,
         'USD_KZT': 464.94,
-        # '':,
-        # '':,
     }
 
-    possible_curr = ['рубль', 'рублей', 'рубля', 'доллар', 'долларов', 'тенге', 'лари']
+    possible_curr = ['рубль', 'рублей', 'рубля', 'доллар', 'долларов', 'тенге', 'лари', 'gel', 'rub', 'kzt', 'usd']
 
     input_curr = ''.join(filter(str.islower, message.text))
     input_value = float(re
@@ -82,27 +79,27 @@ async def convert(message: types.Message):
     print(input_value)
 
     if input_curr in possible_curr:
-        if 'лари' in message.text:
+        if 'лари' or 'gel' in message.text:
             rub = input_value / currency['RUB_GEL']
             gel = input_value
             usd = input_value * currency['GEL_USD']
             kzt = input_value * currency['GEL_KZT']
-        elif 'доллар' in message.text:
+        elif 'доллар' or 'usd' in message.text:
             rub = input_value / currency['RUB_USD']
             gel = input_value / currency['GEL_USD']
             usd = input_value
             kzt = input_value * currency['USD_KZT']
-        elif 'рубл' in message.text:
+        elif 'рубл' or 'rub' in message.text:
             rub = input_value
             gel = input_value * currency['RUB_GEL']
             usd = input_value * currency['RUB_USD']
             kzt = input_value * currency['RUB_KZT']
-        elif 'тенге' in message.text:
+        elif 'тенге' or 'kzt' in message.text:
             rub = input_value / currency['RUB_KZT']
             gel = input_value / currency['GEL_KZT']
             usd = input_value / currency['USD_KZT']
             kzt = input_value
-        await message.reply(text=f"'{message.text}' по курсу равны:\n\n{rub:.2f} RUB\n{gel:.2f} GEL\n{usd:.2f} USD\n{kzt:.2f} KZT")
+        await message.reply(text=f"'{message.text}' по курсу равны:\n\n{rub:.2f} RUB\n{gel:.2f} GEL\n{usd:.2f} USD\n{kzt:.2f} KZT\n\nГлавное меню: /back")
     else:
         await message.reply(text='Валюта не распознана, попробуй снова!\n\nГлавное меню: /back', reply=False)
 
