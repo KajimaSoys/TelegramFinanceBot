@@ -3,16 +3,20 @@ import logging
 
 #import aiohttp
 from aiogram import Bot, Dispatcher, executor, types
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.contrib.middlewares.logging import LoggingMiddleware
 
 import exceptions
 import expenses
 import general
 import incomes
+import re
 from categories import Categories
+from server_utils import States
 
 
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 API_TOKEN = '1798389140:AAFAIr3PJv4sTLrkFGgjEs9h06yNnquZD_s'#os.getenv("TELEGRAM_API_TOKEN")
 
@@ -25,15 +29,18 @@ API_TOKEN = '1798389140:AAFAIr3PJv4sTLrkFGgjEs9h06yNnquZD_s'#os.getenv("TELEGRAM
 #ACCESS_ID = os.getenv("TELEGRAM_ACCESS_ID")
 
 bot = Bot(token=API_TOKEN)#, proxy=PROXY_URL, proxy_auth=PROXY_AUTH)
-dp = Dispatcher(bot)
+dp = Dispatcher(bot, storage=MemoryStorage())
+dp.middleware.setup(LoggingMiddleware())
 #глобальная переменная для определения текущего состояния(Доход/Расход)
 value = 0
 
-@dp.message_handler(commands=['start', 'help', 'back'])
+@dp.message_handler(commands=['start', 'help', 'back'], state='*')
 async def send_welcome(message: types.Message):
     """Отправляет приветственное сообщение и помощь по боту"""
     global value
     value = 0
+    state = dp.current_state(user=message.from_user.id)
+    await state.set_state(States.START_STATE[0])
     await message.answer(
         "Бот для учёта финансов\n\n"
         "Добавить расход: /consumption\n"
@@ -42,10 +49,66 @@ async def send_welcome(message: types.Message):
         "За текущий месяц: /month\n"
         "Последние внесённые расходы: /expenses\n"
         "Последние внесённые доходы: /incomes\n"
+        "Конверитровать валюту: /convert\n"
         )
 
 
-@dp.message_handler(lambda message: message.text.startswith('/del'))
+@dp.message_handler(commands=['convert'], state=States.START_STATE)
+async def convert_command(message: types.Message):
+    state = dp.current_state(user=message.from_user.id)
+    await state.set_state(States.CONVERT_STATE[0])
+    await message.answer("Введите сумму с указанием валюты [доллар/ов, рубль/ей/я, лари, тенге]")
+
+@dp.message_handler(state=States.CONVERT_STATE)
+async def convert(message: types.Message):
+    currency = {
+        'RUB_GEL': 0.045,
+        'RUB_USD': 0.016,
+        'RUB_KZT': 7.65,
+        'GEL_USD': 0.37,
+        # 'GEL_RUB': 22.31,
+        'GEL_KZT': 170.63,
+        'USD_KZT': 464.94,
+        # '':,
+        # '':,
+    }
+
+    possible_curr = ['рубль', 'рублей', 'рубля', 'доллар', 'долларов', 'тенге', 'лари']
+
+    input_curr = ''.join(filter(str.islower, message.text))
+    input_value = float(re
+                        .findall(r'\d*\.\d+|\d*\,\d+|\d+', message.text)[0]
+                        .replace(',', '.'))
+    print(input_value)
+
+    if input_curr in possible_curr:
+        if 'лари' in message.text:
+            rub = input_value / currency['RUB_GEL']
+            gel = input_value
+            usd = input_value * currency['GEL_USD']
+            kzt = input_value * currency['GEL_KZT']
+        elif 'доллар' in message.text:
+            rub = input_value / currency['RUB_USD']
+            gel = input_value / currency['GEL_USD']
+            usd = input_value
+            kzt = input_value * currency['USD_KZT']
+        elif 'рубл' in message.text:
+            rub = input_value
+            gel = input_value * currency['RUB_GEL']
+            usd = input_value * currency['RUB_USD']
+            kzt = input_value * currency['RUB_KZT']
+        elif 'тенге' in message.text:
+            rub = input_value / currency['RUB_KZT']
+            gel = input_value / currency['GEL_KZT']
+            usd = input_value / currency['USD_KZT']
+            kzt = input_value
+        await message.reply(text=f"'{message.text}' по курсу равны:\n\n{rub:.2f} RUB\n{gel:.2f} GEL\n{usd:.2f} USD\n{kzt:.2f} KZT")
+    else:
+        await message.reply(text='Валюта не распознана, попробуй снова!\n\nГлавное меню: /back', reply=False)
+
+
+
+@dp.message_handler(lambda message: message.text.startswith('/del'), state=States.START_STATE)
 async def del_expense(message: types.Message):
     """Удаляет одну запись о расходе или доходе по их идентификатору"""
     if value == 1:
@@ -74,7 +137,7 @@ async def del_expense(message: types.Message):
 
 
 
-@dp.message_handler(commands=['categories'])
+@dp.message_handler(commands=['categories'], state=States.START_STATE)
 async def categories_list(message: types.Message):
     """Отправляет список категорий расходов или доходов"""
     if not value == 0:
@@ -87,21 +150,21 @@ async def categories_list(message: types.Message):
     await message.answer(answer_message)
 
 
-@dp.message_handler(commands=['today'])
+@dp.message_handler(commands=['today'], state=States.START_STATE)
 async def today_statistics(message: types.Message):
     """Отправляет сегодняшнюю статистику"""
     answer_message = general.get_today_statistics()
     await message.answer(answer_message)
 
 
-@dp.message_handler(commands=['month'])
+@dp.message_handler(commands=['month'], state=States.START_STATE)
 async def month_statistics(message: types.Message):
     """Отправляет статистику текущего месяца"""
     answer_message = general.get_month_statistics()
     await message.answer(answer_message)
 
 
-@dp.message_handler(commands=['expenses'])
+@dp.message_handler(commands=['expenses'], state=States.START_STATE)
 async def list_expenses(message: types.Message):
     """Отправляет последние несколько записей о расходах"""
     last_expenses = expenses.last()
@@ -119,7 +182,7 @@ async def list_expenses(message: types.Message):
     await message.answer(answer_message)
 
 
-@dp.message_handler(commands=['incomes'])
+@dp.message_handler(commands=['incomes'], state=States.START_STATE)
 async def list_incomes(message: types.Message):
     """Отправляет последние несколько записей о доходах"""
     last_incomes = incomes.last()
@@ -137,7 +200,7 @@ async def list_incomes(message: types.Message):
     await message.answer(answer_message)
 
 
-@dp.message_handler(commands=['gain'])
+@dp.message_handler(commands=['gain'], state=States.START_STATE)
 async def month_statistics(message: types.Message):
     """Добавляет новый доход"""
     global value
@@ -147,7 +210,7 @@ async def month_statistics(message: types.Message):
                       "Главное меню: /back")
     await message.answer(answer_message)
 
-@dp.message_handler(commands=['consumption'])
+@dp.message_handler(commands=['consumption'], state=States.START_STATE)
 async def month_statistics(message: types.Message):
     """Добавляет новый расход"""
     global value
@@ -157,7 +220,7 @@ async def month_statistics(message: types.Message):
                       "Главное меню: /back")
     await message.answer(answer_message)
 
-@dp.message_handler()
+@dp.message_handler(state=States.START_STATE)
 async def add_expense(message: types.Message):
     """Добавляет новый расход или доход в зависимости от значения value"""
     if value == 1:
