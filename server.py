@@ -99,7 +99,7 @@ async def convert(message: types.Message):
             gel = input_value / currency['GEL_KZT']
             usd = input_value / currency['USD_KZT']
             kzt = input_value
-        await message.reply(text=f"'{message.text}' по курсу равны:\n\n{rub:.2f} RUB\n{gel:.2f} GEL\n{usd:.2f} USD\n{kzt:.2f} KZT\n\nГлавное меню: /back")
+        await message.reply(text=f"'{message.text}' по курсу равны:\n\n{rub:.2f} RUB\n{gel:.2f} GEL\n{usd:.2f} USD\n{kzt:.2f} KZT\n\nГлавное меню: /back", reply=False)
     else:
         await message.reply(text='Валюта не распознана, попробуй снова!\n\nГлавное меню: /back', reply=False)
 
