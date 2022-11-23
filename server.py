@@ -79,22 +79,22 @@ async def convert(message: types.Message):
     print(input_value)
 
     if input_curr in possible_curr:
-        if 'лари' or 'gel' in message.text:
+        if ('лари' or 'gel') in message.text:
             rub = input_value / currency['RUB_GEL']
             gel = input_value
             usd = input_value * currency['GEL_USD']
             kzt = input_value * currency['GEL_KZT']
-        elif 'доллар' or 'usd' in message.text:
+        elif ('доллар' or 'usd') in message.text:
             rub = input_value / currency['RUB_USD']
             gel = input_value / currency['GEL_USD']
             usd = input_value
             kzt = input_value * currency['USD_KZT']
-        elif 'рубл' or 'rub' in message.text:
+        elif ('рубл' or 'rub') in message.text:
             rub = input_value
             gel = input_value * currency['RUB_GEL']
             usd = input_value * currency['RUB_USD']
             kzt = input_value * currency['RUB_KZT']
-        elif 'тенге' or 'kzt' in message.text:
+        elif ('тенге' or 'kzt') in message.text:
             rub = input_value / currency['RUB_KZT']
             gel = input_value / currency['GEL_KZT']
             usd = input_value / currency['USD_KZT']
